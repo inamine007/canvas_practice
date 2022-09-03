@@ -47,7 +47,7 @@ class Sound {
   /**
    * AudioBuffer から AudioBufferSourceNode を生成し再生する
    */
-  play(){
+  play(loop=false, loopCount=1){
     // ノードを生成する
     let node = new AudioBufferSourceNode(this.ctx, {buffer: this.source});
     // ノードを接続する
@@ -63,6 +63,11 @@ class Sound {
     }, false);
     // ノードの再生を開始する
     node.start();
+    if(loop === true) {
+      let time = this.ctx.currentTime;
+      node.loop = true;
+      node.stop(time + (node.buffer.duration * loopCount));
+    }
   }
 }
 

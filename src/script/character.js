@@ -125,7 +125,7 @@ class Character {
     /**
      * @type {Position}
      */
-    this.vector = new Position(0.0, -1.0);
+    this.vector = new Position(1.0, 0.0);
     /**
      * @type {number}
      */
@@ -155,6 +155,8 @@ class Character {
         this.ready = true;
      }, false);
      this.image.src = imagePath;
+
+     this.sound = null;
   }
 
   /**
@@ -179,6 +181,21 @@ class Character {
     let cos = Math.cos(angle);
     // 自身の vector プロパティに設定する
     this.vector.set(cos, sin);
+  }
+
+  /**
+   * ショットが爆発エフェクトを発生できるよう設定する
+   * @param {Array<Explosion>} [targets] - 爆発エフェクトを含む配列
+   */
+   setExplosions(targets){
+    // 引数の状態を確認して有効な場合は設定する
+    if(targets != null && Array.isArray(targets) === true && targets.length > 0){
+      this.explosionArray = targets;
+    }
+  }
+
+  setSound(sound){
+    this.sound = sound;
   }
 
   /**
@@ -288,6 +305,10 @@ class Viper extends Character {
      * @type {Array<Shot>}
      */
     this.singleShotArray = null;
+
+    this.shotRank = null;
+    this.funnel = null;
+    this.isOpening = null;
   }
 
   /**
@@ -300,6 +321,7 @@ class Viper extends Character {
   setComing(startX, startY, endX, endY){
     // 自機キャラクターのライフを 1 に設定する（復活する際を考慮）
     this.life = 1;
+    this.shotRank = 1;
     // 登場中のフラグを立てる
     this.isComing = true;
     // 登場開始時のタイムスタンプを取得する
@@ -312,111 +334,162 @@ class Viper extends Character {
     this.comingEndPosition = new Position(endX, endY);
   }
 
+  setOpening(x, y) {
+    this.position.set(x, y);
+    this.isOpening = true;
+  }
+
   /**
    * ショットを設定する
    * @param {Array<Shot>} shotArray - 自身に設定するショットの配列
    */
-  setShotArray(shotArray){
+  setShotArray(shotArray, singleShotArray){
     // 自身のプロパティに設定する
     this.shotArray = shotArray;
     this.singleShotArray = singleShotArray;
   }
+
+  setFunnel(funnel) {
+    this.funnel = funnel;
+  }
+
   /**
    * キャラクターの状態を更新し描画を行う
    */
   update(){
-    // ライフが尽きていたら何も操作できないようにする
-    if(this.life <= 0){return;}
-    // 現時点のタイムスタンプを取得する
-    let justTime = Date.now();
-
-    // 登場シーンかどうかに応じて処理を振り分ける
-    if(this.isComing === true){
-      // 登場シーンが始まってからの経過時間
-      let comingTime = (justTime - this.comingStart) / 1000;
-      // 登場中は時間が経つほど上に向かって進む
-      let y = this.comingStartPosition.y - comingTime * 50;
-      // 一定の位置まで移動したら登場シーンを終了する
-      if(y <= this.comingEndPosition.y){
-        this.isComing = false;        // 登場シーンフラグを下ろす
-        y = this.comingEndPosition.y; // 行き過ぎの可能性もあるので位置を再設定
-      }
-      // 求めた Y 座標を自機に設定する
-      this.position.set(this.position.x, y);
-
-      // 自機の登場演出時は点滅させる
-      if(justTime % 100 < 50){
-        this.ctx.globalAlpha = 0.5;
-      }
-    }else{
-      // キーの押下状態を調べて挙動を変える
-      if(window.isKeyDown.key_ArrowLeft === true){
-        this.position.x -= this.speed; // アローキーの左
-      }
-      if(window.isKeyDown.key_ArrowRight === true){
-        this.position.x += this.speed; // アローキーの右
-      }
-      if(window.isKeyDown.key_ArrowUp === true){
-        this.position.y -= this.speed; // アローキーの上
-      }
-      if(window.isKeyDown.key_ArrowDown === true){
-        this.position.y += this.speed; // アローキーの下
-      }
-      // 移動後の位置が画面外へ出ていないか確認して修正する
-      let canvasWidth = this.ctx.canvas.width;
-      let canvasHeight = this.ctx.canvas.height;
-      let tx = Math.min(Math.max(this.position.x, 0), canvasWidth);
-      let ty = Math.min(Math.max(this.position.y, 0), canvasHeight);
-      this.position.set(tx, ty);
-
-      // キーの押下状態を調べてショットを生成する
-      if(window.isKeyDown.key_z === true){
-        // ショットを撃てる状態なのかを確認する
-        // ショットチェック用カウンタが 0 以上ならショットを生成できる
-        if(this.shotCheckCounter >= 0){
-          let i = 0;
-          // ショットの生存を確認し非生存のものがあれば生成する
-          for(i = 0; i < this.shotArray.length; ++i){
-            // 非生存かどうかを確認する
-            if(this.shotArray[i].life <= 0){
-              // 自機キャラクターの座標にショットを生成する
-              this.shotArray[i].set(this.position.x, this.position.y);
-              // 中央のショットは攻撃力を 2 にする
-              this.shotArray[i].setPower(2);
-              // ショットを生成したのでインターバルを設定する
-              this.shotCheckCounter = -this.shotInterval;
-              // ひとつ生成したらループを抜ける
-              break;
+    if(this.isOpening !== true) {
+      // ライフが尽きていたら何も操作できないようにする
+      if(this.life <= 0){return;}
+      if(this.funnel.life > 0) this.funnel.set(this);
+      // 現時点のタイムスタンプを取得する
+      let justTime = Date.now();
+  
+      // 登場シーンかどうかに応じて処理を振り分ける
+      if(this.isComing === true){
+        // 登場シーンが始まってからの経過時間
+        let comingTime = (justTime - this.comingStart) / 1000;
+        // 登場中は時間が経つほど上に向かって進む
+        let x = this.comingStartPosition.x + comingTime * 50;
+        // 一定の位置まで移動したら登場シーンを終了する
+        if(x >= this.comingEndPosition.x){
+          this.isComing = false;        // 登場シーンフラグを下ろす
+          x = this.comingEndPosition.x; // 行き過ぎの可能性もあるので位置を再設定
+        }
+        // 求めた Y 座標を自機に設定する
+        this.position.set(x, this.position.y);
+  
+        // 自機の登場演出時は点滅させる
+        if(justTime % 100 < 50){
+          this.ctx.globalAlpha = 0.5;
+        }
+      }else{
+        // キーの押下状態を調べて挙動を変える
+        if(window.isKeyDown.key_ArrowLeft === true){
+          this.position.x -= this.speed; // アローキーの左
+        }
+        if(window.isKeyDown.key_ArrowRight === true){
+          this.position.x += this.speed; // アローキーの右
+        }
+        if(window.isKeyDown.key_ArrowUp === true){
+          this.position.y -= this.speed; // アローキーの上
+        }
+        if(window.isKeyDown.key_ArrowDown === true){
+          this.position.y += this.speed; // アローキーの下
+        }
+        // 移動後の位置が画面外へ出ていないか確認して修正する
+        let canvasWidth = this.ctx.canvas.width;
+        let canvasHeight = this.ctx.canvas.height;
+        let tx = Math.min(Math.max(this.position.x, 0), canvasWidth);
+        let ty = Math.min(Math.max(this.position.y, 0), canvasHeight);
+        this.position.set(tx, ty);
+  
+        // キーの押下状態を調べてショットを生成する
+        if(window.isKeyDown.key_z === true){
+          // ショットを撃てる状態なのかを確認する
+          // ショットチェック用カウンタが 0 以上ならショットを生成できる
+          if(this.shotCheckCounter >= 0){
+            let i = 0;
+            switch (this.shotRank) {
+              case 2:
+                // ショットの生存を確認し非生存のものがあれば生成する
+                for(i = 0; i < this.shotArray.length; ++i){
+                  // 非生存かどうかを確認する
+                  if(this.shotArray[i].life <= 0){
+                    // 自機キャラクターの座標にショットを生成する
+                    this.shotArray[i].set(this.position.x, this.position.y);
+                    // 中央のショットは攻撃力を 2 にする
+                    this.shotArray[i].setPower(2);
+                    this.shotArray[i].setVectorFromAngle(0)
+                    // ショットを生成したのでインターバルを設定する
+                    this.shotCheckCounter = -this.shotInterval;
+                    // ひとつ生成したらループを抜ける
+                    break;
+                  }
+                }
+                break;
+              case 3:
+                // ショットの生存を確認し非生存のものがあれば生成する
+                for(i = 0; i < this.shotArray.length; ++i){
+                  // 非生存かどうかを確認する
+                  if(this.shotArray[i].life <= 0){
+                    // 自機キャラクターの座標にショットを生成する
+                    this.shotArray[i].set(this.position.x, this.position.y);
+                    // 中央のショットは攻撃力を 2 にする
+                    this.shotArray[i].setPower(2);
+                    this.shotArray[i].setVectorFromAngle(0)
+                    // ショットを生成したのでインターバルを設定する
+                    this.shotCheckCounter = -this.shotInterval;
+                    // ひとつ生成したらループを抜ける
+                    break;
+                  }
+                }
+  
+                // シングルショットの生存を確認し非生存のものがあれば生成する
+                // このとき、2 個をワンセットで生成し左右に進行方向を振り分ける
+                for(i = 0; i < this.singleShotArray.length; i += 2){
+                  // 非生存かどうかを確認する
+                  if(this.singleShotArray[i].life <= 0 && this.singleShotArray[i + 1].life <= 0){
+                    // 真上の方向（270 度）から左右に 10 度傾いたラジアン
+                    let radCW = 10 * Math.PI / 180;  // 時計回りに 10 度分
+                    let radCCW = 350 * Math.PI / 180; // 反時計回りに 10 度分
+                    // 自機キャラクターの座標にショットを生成する
+                    this.singleShotArray[i].set(this.position.x, this.position.y);
+                    this.singleShotArray[i].setVectorFromAngle(radCW); // やや右に向かう
+                    this.singleShotArray[i + 1].set(this.position.x, this.position.y);
+                    this.singleShotArray[i + 1].setVectorFromAngle(radCCW); // やや左に向かう
+                    // ショットを生成したのでインターバルを設定する
+                    this.shotCheckCounter = -this.shotInterval;
+                    // 一組生成したらループを抜ける
+                    break;
+                  }
+                }
+                break;
+              default:
+                for(i = 0; i < this.singleShotArray.length; i++){
+                  // 非生存かどうかを確認する
+                  if(this.singleShotArray[i].life <= 0){
+                    this.singleShotArray[i].set(this.position.x, this.position.y);
+                    this.singleShotArray[i].setVectorFromAngle(0);
+                    // ショットを生成したのでインターバルを設定する
+                    this.shotCheckCounter = -this.shotInterval;
+                    // 一組生成したらループを抜ける
+                    break;
+                  }
+                }
+                break;
             }
-          }
-
-          // シングルショットの生存を確認し非生存のものがあれば生成する
-          // このとき、2 個をワンセットで生成し左右に進行方向を振り分ける
-          for(i = 0; i < this.singleShotArray.length; i += 2){
-            // 非生存かどうかを確認する
-            if(this.singleShotArray[i].life <= 0 && this.singleShotArray[i + 1].life <= 0){
-              // 真上の方向（270 度）から左右に 10 度傾いたラジアン
-              let radCW = 280 * Math.PI / 180;  // 時計回りに 10 度分
-              let radCCW = 260 * Math.PI / 180; // 反時計回りに 10 度分
-              // 自機キャラクターの座標にショットを生成する
-              this.singleShotArray[i].set(this.position.x, this.position.y);
-              this.singleShotArray[i].setVectorFromAngle(radCW); // やや右に向かう
-              this.singleShotArray[i + 1].set(this.position.x, this.position.y);
-              this.singleShotArray[i + 1].setVectorFromAngle(radCCW); // やや左に向かう
-              // ショットを生成したのでインターバルを設定する
-              this.shotCheckCounter = -this.shotInterval;
-              // 一組生成したらループを抜ける
-              break;
+            if(this.sound !== null) {
+              this.sound.play();
             }
           }
         }
+        // ショットチェック用のカウンタをインクリメントする
+        ++this.shotCheckCounter;
       }
-      // ショットチェック用のカウンタをインクリメントする
-      ++this.shotCheckCounter;
     }
 
     // 自機キャラクターを描画する
-    this.draw();
+    this.rotationDraw();
 
     // 念の為グローバルなアルファの状態を元に戻す
     this.ctx.globalAlpha = 1.0;
@@ -464,7 +537,15 @@ class Enemy extends Character {
      * 自身が攻撃の対象とする Character 由来のインスタンス
      * @type {Character}
      */
-    this.attackTarget = null;
+    this.attackTargetArray = null;
+
+    this.comingStart = null;
+
+    this.firePosition = null;
+
+    this.dropItemArray = null;
+
+    this.hasItem = false;
   }
 
   /**
@@ -474,7 +555,7 @@ class Enemy extends Character {
    * @param {number} [life=1] - 設定するライフ
    * @param {string} [type='default'] - 設定するタイプ
    */
-  set(x, y, life = 1, type = 'default'){
+  set(x, y, life = 1, type = 'default', offset = [0,0]){
     // 登場開始位置に敵キャラクターを移動させる
     this.position.set(x, y);
     // 敵キャラクターのライフを 0 より大きい値（生存の状態）に設定する
@@ -483,6 +564,9 @@ class Enemy extends Character {
     this.type = type;
     // 敵キャラクターのフレームをリセットする
     this.frame = 0;
+    this.comingStart = Date.now();
+    this.firePosition = {x: offset[0], y: offset[1]};
+    this.dropItemInterval = 3;
   }
 
   /**
@@ -494,13 +578,41 @@ class Enemy extends Character {
     this.shotArray = shotArray;
   }
 
+  setDropItemArray(itemArray) {
+    this.dropItemArray = itemArray;
+  }
+
+  setHasItem(bool) {
+    this.hasItem = bool;
+  }
+
   /**
    * 攻撃対象を設定する
    * @param {Character} target - 自身が攻撃対象とするインスタンス
    */
-  setAttackTarget(target){
+  setAttackTargets(targetArray){
     // 自身のプロパティに設定する
-    this.attackTarget = target;
+    this.attackTargetArray = targetArray;
+  }
+
+  static assaultTarget(prot) {
+    prot.attackTargetArray.map((v) => {
+      let dist = prot.position.distance(v.position);
+      if(dist <= (prot.width + v.width) / 4) {
+        if(v.isComing === true) return;
+        v.life -= 1;
+        if(v.life <= 0) {
+          for(let i = 0; prot.explosionArray.length; i++) {
+            if(prot.explosionArray[i].life !== true) {
+              prot.explosionArray[i].set(v.position.x, v.position.y);
+              break;
+            }
+          }
+          // 自身のライフを 0 にする
+          prot.life = 0;
+        }
+      }
+    });
   }
 
   /**
@@ -509,6 +621,7 @@ class Enemy extends Character {
   update(){
     // もし敵キャラクターのライフが 0 以下の場合はなにもしない
     if(this.life <= 0){return;}
+    // let dist = null;
 
     // タイプに応じて挙動を変える
     // タイプに応じてライフを 0 にする条件も変える
@@ -519,18 +632,18 @@ class Enemy extends Character {
         // 配置後のフレームが 60 で割り切れるときにショットを放つ
         if(this.frame % 60 === 0){
           // 攻撃対象となる自機キャラクターに向かうベクトル
-          let tx = this.attackTarget.position.x - this.position.x;
-          let ty = this.attackTarget.position.y - this.position.y;
+          let tx = this.attackTargetArray[0].position.x - this.position.x;
+          let ty = this.attackTargetArray[0].position.y - this.position.y;
           // ベクトルを単位化する
           let tv = Position.calcNormal(tx, ty);
           // 自機キャラクターにややゆっくりめのショットを放つ
           this.fire(tv.x, tv.y, 4.0);
         }
         // X 座標はサイン波で、Y 座標は一定量で変化する
-        this.position.x += Math.sin(this.frame / 10);
-        this.position.y += 2.0;
+        this.position.x -= 2.0;
+        this.position.y += Math.sin(this.frame / 20);
         // 画面外（画面下端）へ移動していたらライフを 0（非生存の状態）に設定する
-        if(this.position.y - this.height > this.ctx.canvas.height){
+        if(this.position.x + this.width < 0){
           this.life = 0;
         }
         break;
@@ -550,12 +663,80 @@ class Enemy extends Character {
           }
         }
         // X 座標はサイン波で、Y 座標は一定量で変化する
-        this.position.x += Math.sin((this.frame + 90) / 50) * 2.0;
-        this.position.y += 1.0;
+        this.position.x -= 1.0;
+        this.position.y += Math.sin((this.frame + 90) / 50) * 2.0;;
         // 画面外（画面下端）へ移動していたらライフを 0（非生存の状態）に設定する
-        if(this.position.y - this.height > this.ctx.canvas.height){
+        if(this.position.x + this.width < 0){
           this.life = 0;
         }
+        break;
+      // 岩タイプ。ただ進行方向に進むだけ。ちょいタフ。
+      case 'block':
+        this.speed = 2;
+        // 敵キャラクターを進行方向に沿って移動させる
+        this.position.x += this.vector.x * this.speed;
+        this.position.y += this.vector.y * this.speed;
+        // 画面外（画面下端）へ移動していたらライフを 0（非生存の状態）に設定する
+        if(this.position.x + this.width < 0){
+          this.life = 0;
+        }
+        Enemy.assaultTarget(this);
+        break;
+      // 突進タイプ。早い。
+      case 'assault':
+        // 画面外（画面下端）へ移動していたらライフを 0（非生存の状態）に設定する
+        if(this.position.x + this.width < 0){
+          this.life = 0;
+        }
+        let justTime = Date.now();
+        if(this.position.x <= CANVAS_WIDTH - 100) {
+          let vector = new Position(
+            this.attackTargetArray[0].position.x - this.position.x,
+            this.attackTargetArray[0].position.y - this.position.y
+          );
+          if((justTime - this.comingStart) / 1000 >= 2.0) {
+            this.speed = 9;
+            this.position.x += this.vector.x * this.speed;
+            this.position.y += this.vector.y * this.speed;
+          } else {
+            let normalizedVector = vector.normalize();
+            this.vector = this.vector.normalize();
+            let cross = this.vector.cross(normalizedVector);
+            let rad = Math.PI / 180.0;
+            if(cross > 0.0){
+              this.vector.rotate(rad);
+            }else if(cross < 0.0){
+              this.vector.rotate(-rad);
+            }
+            this.angle = Math.atan2(this.vector.y, this.vector.x);
+            this.position.x += 0;
+          }
+        } else {
+          this.speed = 3;
+          this.position.x += this.vector.x * this.speed;
+          this.position.y += this.vector.y * this.speed;
+        }
+        Enemy.assaultTarget(this);
+        break;
+      case 'boss_shot':
+        if(this.position.x <= this.firePosition.x) {
+          // 45 度ごとにオフセットした全方位弾を放つ
+          for(let i = 0; i < 360; i += 30){
+            let r = i * Math.PI / 180;
+            // ラジアンからサインとコサインを求める
+            let s = Math.sin(r);
+            let c = Math.cos(r);
+            // 求めたサイン・コサインでショットを放つ
+            this.fire(c, s, 3.0);
+          }
+          this.life = 0;
+        } else {
+          this.position.x -= 1.0 * this.speed; 
+        }
+        if(this.position.x + this.width < 0){
+          this.life = 0;
+        }
+        Enemy.assaultTarget(this);
         break;
       // default タイプは設定されている進行方向にまっすぐ進むだけの挙動
       // ショットの向きは常に真下に向かって放つ
@@ -569,14 +750,16 @@ class Enemy extends Character {
         this.position.x += this.vector.x * this.speed;
         this.position.y += this.vector.y * this.speed;
         // 画面外（画面下端）へ移動していたらライフを 0（非生存の状態）に設定する
-        if(this.position.y - this.height > this.ctx.canvas.height){
+        if(this.position.x + this.width < 0){
           this.life = 0;
         }
         break;
+
+      
     }
 
     // 描画を行う（いまのところ特に回転は必要としていないのでそのまま描画）
-    this.draw();
+    this.rotationDraw();
     // 自身のフレームをインクリメントする
     ++this.frame;
   }
@@ -586,7 +769,7 @@ class Enemy extends Character {
    * @param {number} [x=0.0] - 進行方向ベクトルの X 要素
    * @param {number} [y=1.0] - 進行方向ベクトルの Y 要素
    */
-  fire(x = 0.0, y = 1.0, speed = 5.0){
+  fire(x = -1.0, y = 0.0, speed = 5.0){
     // ショットの生存を確認し非生存のものがあれば生成する
     for(let i = 0; i < this.shotArray.length; ++i){
       // 非生存かどうかを確認する
@@ -651,6 +834,7 @@ class Boss extends Character {
      * @type {Character}
      */
     this.attackTarget = null;
+    this.enemyArray = null;
   }
 
   /**
@@ -686,6 +870,11 @@ class Boss extends Character {
     this.homingArray = homingArray;
   }
 
+  setEnemyArray(enemyArray){
+    // 自身のプロパティに設定する
+    this.enemyArray = enemyArray;
+  }
+
   /**
    * 攻撃対象を設定する
    * @param {Character} target - 自身が攻撃対象とするインスタンス
@@ -715,9 +904,9 @@ class Boss extends Character {
     switch(this.mode){
       // 出現演出時
       case 'invade':
-        this.position.y += this.speed;
-        if(this.position.y > 100){
-          this.position.y = 100;
+        this.position.x -= this.speed;
+        if(this.position.x < this.ctx.canvas.width - 200){
+          this.position.x = this.ctx.canvas.width - 200;
           this.mode = 'floating';
           this.frame = 0;
         }
@@ -729,10 +918,10 @@ class Boss extends Character {
           this.life = 0;
         }
         break;
-      case 'floating':
+      case 'floating':        
         // 配置後のフレーム数を 1000 で割ったとき、余りが 500 未満となる
         // 場合と、そうでない場合で、ショットに関する挙動を変化させる
-        if(this.frame % 1000 < 500){
+        if(this.frame % 1500 < 500){
           // 配置後のフレーム数を 200 で割った余りが 140 より大きく、かつ、
           // 10 で割り切れる場合に、自機キャラクター狙いショットを放つ
           if(this.frame % 200 > 140 && this.frame % 10 === 0){
@@ -744,14 +933,18 @@ class Boss extends Character {
             // 自機キャラクターにややゆっくりめのショットを放つ
             this.fire(tv.x, tv.y, 3.0);
           }
-        }else{
+        }else if(this.frame % 1500 >= 500 && this.frame % 1500 < 1000){
           // ホーミングショットを放つ
           if(this.frame % 50 === 0){
-            this.homingFire(0, 1, 3.5);
+            this.homingFire(-1.0, 0, 3.5);
+          }
+        } else {
+          if(this.frame % 80 === 0){
+            this.enemyFire(-1.0, 0, 1, 'boss_shot');
           }
         }
         // X 座標はサイン波で左右に揺れるように動かす
-        this.position.x += Math.cos(this.frame / 100) * 2.0;
+        this.position.y += Math.cos(this.frame / 100) * 2.0;
         break;
       default:
         break;
@@ -792,7 +985,7 @@ class Boss extends Character {
    * @param {number} [y=1.0] - 進行方向ベクトルの Y 要素
    * @param {number} [speed=3.0] - ショットのスピード
    */
-  homingFire(x = 0.0, y = 1.0, speed = 3.0){
+  homingFire(x = -1.0, y = 0.0, speed = 3.0){
     // ショットの生存を確認し非生存のものがあれば生成する
     for(let i = 0; i < this.homingArray.length; ++i){
       // 非生存かどうかを確認する
@@ -803,6 +996,22 @@ class Boss extends Character {
         this.homingArray[i].setSpeed(speed);
         // ショットの進行方向を設定する（真下）
         this.homingArray[i].setVector(x, y);
+        // ひとつ生成したらループを抜ける
+        break;
+      }
+    }
+  }
+
+  enemyFire(x = -1.0, y = 0.0, life = 1, type = 'default') {
+    // ショットの生存を確認し非生存のものがあれば生成する
+    for(let i = 0; i < this.enemyArray.length; ++i){
+      // 非生存かどうかを確認する
+      if(this.enemyArray[i].life <= 0){
+        let fireX = Math.floor(Math.random() * (this.ctx.canvas.width - 200));
+        // ボスキャラクターの座標にショットを生成する
+        this.enemyArray[i].set(this.position.x, this.position.y, life, type, [fireX, 0]);
+        // ショットの進行方向を設定する（真下）
+        this.enemyArray[i].setVector(x, y);
         // ひとつ生成したらループを抜ける
         break;
       }
@@ -896,17 +1105,6 @@ class Shot extends Character {
   }
 
   /**
-   * ショットが爆発エフェクトを発生できるよう設定する
-   * @param {Array<Explosion>} [targets] - 爆発エフェクトを含む配列
-   */
-  setExplosions(targets){
-    // 引数の状態を確認して有効な場合は設定する
-    if(targets != null && Array.isArray(targets) === true && targets.length > 0){
-      this.explosionArray = targets;
-    }
-  }
-
-  /**
    * キャラクターの状態を更新し描画を行う
    */
   update(){
@@ -955,6 +1153,20 @@ class Shot extends Character {
             let score = 100;
             if(v.type === 'large'){
               score = 1000;
+            } else if(v.type === 'block') {
+              for(let i = 0; i < v.dropItemArray.length; ++i){
+                if(v.hasItem === true) {
+                  v.dropItemArray[i].set(v.position.x, v.position.y);
+                }
+                break;
+              }
+            } else if(v.type === 'assault') {
+              for(let i = 0; i < v.dropItemArray.length; ++i){
+                if(v.hasItem === true) {
+                  v.dropItemArray[i].set(v.position.x, v.position.y, 1, 'funnel');
+                }
+                break;
+              }
             }
             // スコアシステムにもよるが仮でここでは最大スコアを制限
             gameScore = Math.min(gameScore + score, 99999);
@@ -1310,7 +1522,7 @@ class BackgroundStar {
     // 星の色を設定する
     this.ctx.fillStyle = this.color;
     // 星の現在位置を速度に応じて動かす
-    this.position.y += this.speed;
+    this.position.x -= this.speed;
     // 星の矩形を描画する
     this.ctx.fillRect(
       this.position.x - this.size / 2,
@@ -1319,9 +1531,257 @@ class BackgroundStar {
       this.size
     );
     // もし画面下端よりも外に出てしまっていたら上端側に戻す
-    if(this.position.y + this.size > this.ctx.canvas.height){
-      this.position.y = -this.size;
+    if(this.position.x + this.size < 0){
+      this.position.x = this.ctx.canvas.width + this.size;
     }
+  }
+}
+
+/**
+ * アイテムクラス
+ */
+ class Item extends Character {
+  /**
+   * @constructor
+   * @param {CanvasRenderingContext2D} ctx - 描画などに利用する 2D コンテキスト
+   * @param {number} x - X 座標
+   * @param {number} y - Y 座標
+   * @param {number} w - 幅
+   * @param {number} h - 高さ
+   * @param {Image} image - キャラクター用の画像のパス
+   */
+  constructor(ctx, x, y, w, h, imagePath){
+    // 継承元の初期化
+    super(ctx, x, y, w, h, 0, imagePath);
+
+    /**
+     * 自身のモード
+     * @type {string}
+     */
+    this.type = '';
+    /**
+     * 自身が出現してからのフレーム数
+     * @type {number}
+     */
+    this.frame = 0;
+    /**
+     * 自身の移動スピード（update 一回あたりの移動量）
+     * @type {number}
+     */
+    this.speed = 3;
+    /**
+     * 自身が攻撃の対象とする Character 由来のインスタンス
+     * @type {Character}
+     */
+    this.attackTarget = null;
+  }
+
+  /**
+   * アイテムを配置する
+   * @param {number} x - 配置する X 座標
+   * @param {number} y - 配置する Y 座標
+   * @param {number} [life=1] - 設定するライフ
+   */
+  set(x, y, life = 1, type = 'shotUp'){
+    this.position.set(x, y);
+    this.life = life;
+    this.type = type;
+    this.frame = 0;
+  }
+
+  /**
+   * 攻撃対象を設定する
+   * @param {Character} target - 自身が攻撃対象とするインスタンス
+   */
+  setAttackTarget(target){
+    // 自身のプロパティに設定する
+    this.attackTarget = target;
+  }
+
+  /**
+   * モードを設定する
+   * @param {string} mode - 自身に設定するモード
+   */
+  setType(type){
+    // 自身のプロパティに設定する
+    this.type = type;
+  }
+
+  static isPluckedTarget(prot) {
+    let dist = prot.position.distance(prot.attackTarget.position);
+    if(dist <= (prot.width + prot.attackTarget.width) / 4) {
+      if(prot.attackTarget.isComing === true) return false;
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * アイテムの状態を更新し描画を行う
+   */
+  update(){
+    if(this.life <= 0){return;}
+
+    // モードに応じて挙動を変える
+    switch(this.type){
+      // 出現演出時
+      case 'shotUp':
+        this.position.x -= this.speed;
+        if(Item.isPluckedTarget(this) === true) {
+          if(this.attackTarget.shotRank === 3) {
+            gameScore = Math.min(gameScore + 100, 99999);
+          } else {
+            this.attackTarget.shotRank++;
+          }
+          if(this.sound !== null) {
+            this.sound.play();
+          }
+          this.life = 0;
+        }
+        break;
+      case 'funnel':
+        this.position.x -= this.speed;
+        if(Item.isPluckedTarget(this) === true) {
+          if(this.attackTarget.funnel.life === 1) {
+            gameScore = Math.min(gameScore + 100, 99999);
+          } else {
+            this.attackTarget.funnel.life = 1;
+          }
+          if(this.sound !== null) {
+            this.sound.play();
+          }
+          this.life = 0;
+        }
+        break;
+      default:
+        break;
+    }
+
+    // 描画を行う（いまのところ特に回転は必要としていないのでそのまま描画）
+    this.draw();
+    // 自身のフレームをインクリメントする
+    ++this.frame;
+  }
+}
+
+/**
+ * funnel クラス
+ */
+class Funnel extends Viper {
+  /**
+   * @constructor
+   * @param {CanvasRenderingContext2D} ctx - 描画などに利用する 2D コンテキスト
+   * @param {number} x - X 座標
+   * @param {number} y - Y 座標
+   * @param {number} w - 幅
+   * @param {number} h - 高さ
+   * @param {Image} imagePath - キャラクター用の画像のパス
+   */
+  constructor(ctx, x, y, w, h, imagePath){
+    // 継承元の初期化
+    super(ctx, x, y, w, h, imagePath);
+
+    this.master = null;
+  }
+
+  set(master){
+    this.shotRank = 1;
+    this.master = master;
+    this.position.set(master.position.x - 30, master.position.y - 40);
+  }
+
+  /**
+   * キャラクターの状態を更新し描画を行う
+   */
+  update(){
+    // ライフが尽きていたら何も操作できないようにする
+    if(this.master && this.master.life <= 0) this.life = 0;
+    if(this.life <= 0){return;}
+  
+    // キーの押下状態を調べてショットを生成する
+    if(window.isKeyDown.key_z === true){
+      // ショットを撃てる状態なのかを確認する
+      // ショットチェック用カウンタが 0 以上ならショットを生成できる
+      if(this.shotCheckCounter >= 0){
+        let i = 0;
+        for(i = 0; i < this.singleShotArray.length; ++i){
+          // 非生存かどうかを確認する
+          if(this.singleShotArray[i].life <= 0){
+            // 自機キャラクターの座標にショットを生成する
+            this.singleShotArray[i].set(this.position.x, this.position.y);
+            this.singleShotArray[i].setVectorFromAngle(0)
+            // ショットを生成したのでインターバルを設定する
+            this.shotCheckCounter = -this.shotInterval;
+            // ひとつ生成したらループを抜ける
+            break;
+          }
+        }
+      }
+    }
+    // ショットチェック用のカウンタをインクリメントする
+    ++this.shotCheckCounter;
+
+    // 自機キャラクターを描画する
+    this.rotationDraw();
+
+    // 念の為グローバルなアルファの状態を元に戻す
+    this.ctx.globalAlpha = 1.0;
+  }
+}
+
+class Opening extends Character {
+  /**
+   * @constructor
+   * @param {CanvasRenderingContext2D} ctx - 描画などに利用する 2D コンテキスト
+   * @param {number} x - X 座標
+   * @param {number} y - Y 座標
+   * @param {number} w - 幅
+   * @param {number} h - 高さ
+   * @param {Image} image - キャラクター用の画像のパス
+   */
+  constructor(ctx, x, y, w, h, imagePath, type){
+    // 継承元の初期化
+    super(ctx, x, y, w, h, 0, imagePath);
+
+    this.type = type;
+    /**
+     * 自身の移動スピード（update 一回あたりの移動量）
+     * @type {number}
+     */
+    this.speed = 2;
+  }
+
+  /**
+   * ボスを配置する
+   * @param {number} x - 配置する X 座標
+   * @param {number} y - 配置する Y 座標
+   * @param {number} [life=1] - 設定するライフ
+   */
+  set(x, y){
+    // 登場開始位置にボスキャラクターを移動させる
+    this.position.set(x, y);
+  }
+
+  hit(point) {
+    let x = this.position.x - this.width / 2;
+    let y = this.position.y - this.height / 2;
+    return (x <= point.x && point.x <= x + this.width) &&
+           (y <= point.y && point.y <= y + this.height);
+  }
+
+  /**
+   * ボスキャラクターの状態を更新し描画を行う
+   */
+  update(){
+    if(this.type === 'title') {
+      this.position.y += this.speed;
+      if(this.position.y >= this.ctx.canvas.height / 2 - 50) {
+        this.position.y = this.ctx.canvas.height / 2 - 50;
+      }
+    }
+
+    // 描画を行う（いまのところ特に回転は必要としていないのでそのまま描画）
+    this.draw();
   }
 }
 
