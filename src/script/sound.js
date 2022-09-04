@@ -16,7 +16,20 @@ class Sound {
      * @type {AudioBuffer}
      */
     this.source = null;
+
+    this.pause = false;
   }
+
+  setPause() {
+    if(this.pause === true) {
+      this.ctx.resume();
+      this.pause = false;
+    } else {
+      this.ctx.suspend();
+      this.pause = true;
+    }
+  }
+
   /**
    * オーディオファイルをロードする
    * @param {string} audioPath - オーディオファイルのパス
@@ -47,7 +60,7 @@ class Sound {
   /**
    * AudioBuffer から AudioBufferSourceNode を生成し再生する
    */
-  play(loop=false, loopCount=1){
+  play(loop=false, loopCount=null){
     // ノードを生成する
     let node = new AudioBufferSourceNode(this.ctx, {buffer: this.source});
     // ノードを接続する
@@ -66,7 +79,7 @@ class Sound {
     if(loop === true) {
       let time = this.ctx.currentTime;
       node.loop = true;
-      node.stop(time + (node.buffer.duration * loopCount));
+      if(loopCount) node.stop(time + (node.buffer.duration * loopCount));
     }
   }
 }

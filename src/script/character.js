@@ -597,6 +597,7 @@ class Enemy extends Character {
 
   static assaultTarget(prot) {
     prot.attackTargetArray.map((v) => {
+      if(prot.life <= 0 || v.life <= 0) {return;}
       let dist = prot.position.distance(v.position);
       if(dist <= (prot.width + v.width) / 4) {
         if(v.isComing === true) return;
@@ -951,7 +952,7 @@ class Boss extends Character {
     }
 
     // 描画を行う（いまのところ特に回転は必要としていないのでそのまま描画）
-    this.draw();
+    this.rotationDraw();
     // 自身のフレームをインクリメントする
     ++this.frame;
   }
@@ -1155,17 +1156,17 @@ class Shot extends Character {
               score = 1000;
             } else if(v.type === 'block') {
               for(let i = 0; i < v.dropItemArray.length; ++i){
-                if(v.hasItem === true) {
+                if(v.hasItem === true && v.dropItemArray[i].life <= 0) {
                   v.dropItemArray[i].set(v.position.x, v.position.y);
+                  break;
                 }
-                break;
               }
             } else if(v.type === 'assault') {
               for(let i = 0; i < v.dropItemArray.length; ++i){
-                if(v.hasItem === true) {
+                if(v.hasItem === true && v.dropItemArray[i].life <= 0) {
                   v.dropItemArray[i].set(v.position.x, v.position.y, 1, 'funnel');
+                  break;
                 }
-                break;
               }
             }
             // スコアシステムにもよるが仮でここでは最大スコアを制限

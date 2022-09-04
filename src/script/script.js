@@ -171,6 +171,8 @@ let powerupSound = null;
 let shotSound = null;
 let clearSound = null;
 let warningSound = null;
+let bgCommonSound = null;
+let bgBossSound = null;
 
 let dropItemArray = [];
 let openingId = null;
@@ -226,6 +228,8 @@ window.addEventListener('load', () => {
       clearSound = new Sound();
       warningSound = new Sound();
       powerupSound = new Sound();
+      bgCommonSound = new Sound();
+      bgBossSound = new Sound();
       // 音声データを読み込み、準備完了してから初期化処理を行う
       soundCheck();
     } else if(soundOffButton.hit(point)) {
@@ -278,7 +282,23 @@ function soundCheck() {
       resolve();
     });
   });
-  Promise.all([promise1, promise2, promise3, promise4]).then(() => {
+  const promise6 = new Promise((resolve, reject) => {
+    bgCommonSound.load('./sound/bg_common.mp3', (error) => {
+      if(error != null){
+        reject('bgCommonSound ファイルの読み込みエラーです');
+      }
+      resolve();
+    });
+  });
+  const promise7 = new Promise((resolve, reject) => {
+    bgBossSound.load('./sound/bg_boss.mp3', (error) => {
+      if(error != null){
+        reject('bgBossSound ファイルの読み込みエラーです');
+      }
+      resolve();
+    });
+  });
+  Promise.all([promise1, promise2, promise3, promise4, promise5, promise6, promise7]).then(() => {
     // 初期化処理を行う
     initialize();
     // インスタンスの状態を確認する
@@ -363,10 +383,11 @@ function initialize(){
   boss.setEnemyArray(bossEnemyShotArray);
   // 敵キャラクターは常に自機キャラクターを攻撃対象とする
   boss.setAttackTarget(viper);
+  boss.setVectorFromAngle(180 * Math.PI / 180);
 
   // ドロップアイテムセット
   for(i = 0; i < DROP_ITEM_MAX_COUNT; i++) {
-    dropItemArray[i] = new Item(ctx, 0, 0, 48, 48, './image/enemy_small.png');
+    dropItemArray[i] = new Item(ctx, 0, 0, 32, 32, './image/powerup.png');
     dropItemArray[i].setAttackTarget(viper);
     dropItemArray[i].setSound(powerupSound);
   }
@@ -391,14 +412,14 @@ function initialize(){
 
   // 岩を初期化する
   for(i = 0; i < ENEMY_BLOCK_MAX_COUNT; ++i){
-    enemyArray[ENEMY_SMALL_MAX_COUNT + ENEMY_LARGE_MAX_COUNT + i] = new Enemy(ctx, 0, 0, 64, 64, './image/enemy_small.png');
+    enemyArray[ENEMY_SMALL_MAX_COUNT + ENEMY_LARGE_MAX_COUNT + i] = new Enemy(ctx, 0, 0, 64, 64, './image/block.png');
     // 敵キャラクターは常に自機キャラクターを攻撃対象とする
     enemyArray[ENEMY_SMALL_MAX_COUNT + ENEMY_LARGE_MAX_COUNT + i].setAttackTargets([viper, funnel]);
     enemyArray[ENEMY_SMALL_MAX_COUNT + ENEMY_LARGE_MAX_COUNT + i].setDropItemArray(dropItemArray);
   }
 
   for(i = 0; i < ENEMY_ASSAULT_MAX_COUNT; ++i){
-    enemyArray[ENEMY_SMALL_MAX_COUNT + ENEMY_LARGE_MAX_COUNT + ENEMY_BLOCK_MAX_COUNT + i] = new Enemy(ctx, 0, 0, 48, 48, './image/enemy_small.png');
+    enemyArray[ENEMY_SMALL_MAX_COUNT + ENEMY_LARGE_MAX_COUNT + ENEMY_BLOCK_MAX_COUNT + i] = new Enemy(ctx, 0, 0, 48, 48, './image/assault.png');
     // 敵キャラクターは常に自機キャラクターを攻撃対象とする
     enemyArray[ENEMY_SMALL_MAX_COUNT + ENEMY_LARGE_MAX_COUNT + ENEMY_BLOCK_MAX_COUNT + i].setAttackTargets([viper, funnel]);
     enemyArray[ENEMY_SMALL_MAX_COUNT + ENEMY_LARGE_MAX_COUNT + ENEMY_BLOCK_MAX_COUNT + i].setDropItemArray(dropItemArray);
@@ -535,6 +556,13 @@ function eventSetting(){
 function sceneSetting(){
   // イントロシーン
   scene.add('intro', (time) => {
+    if(bgCommonSound !== null && scene.frame === 0) {
+      if(bgCommonSound.pause === true) {
+        bgCommonSound.setPause();
+      } else {
+        bgCommonSound.play(true);
+      }
+    }
     // 3 秒経過したらシーンを invade_default_type に変更する
     if(time > 3.0){
       scene.use('invade_default_type');
@@ -577,6 +605,11 @@ function sceneSetting(){
   });
   // invade シーン（wave move type の敵キャラクターを生成）
   scene.add('invade_assault_type', (time) => {
+    if(scene.frame === 0) {
+      if(viper.shotRank === 1) {
+        dropItemArray[0].set(CANVAS_WIDTH, CANVAS_HEIGHT / 2);
+      }
+    }
     let num = Math.floor(Math.random() * 10) + 1;
     let dropItemProbability = 3;
     // シーンのフレーム数が 50 で割り切れるときは敵キャラクターを配置する
@@ -675,6 +708,9 @@ function sceneSetting(){
     }
   });
   scene.add('warning', (time) => {
+    if(bgCommonSound !== null && scene.frame === 0) {
+      bgCommonSound.setPause();
+    }
     if(warningSound !== null && scene.frame === 0) {
       warningSound.play(true, 2);
     }
@@ -702,6 +738,14 @@ function sceneSetting(){
   });
   // invade シーン（ボスキャラクターを生成）
   scene.add('invade_boss', (time) => {
+    if(bgBossSound !== null && scene.frame === 10) {
+      console.log(bgBossSound.pause, bgCommonSound);
+      if(bgBossSound.pause === true) {
+        bgBossSound.setPause();
+      } else {
+        bgBossSound.play(true);
+      }
+    }
     // シーンのフレーム数が 0 となる最初のフレームでボスを登場させる
     if(scene.frame === 0){
       // 画面中央上から登場するように位置を指定し、ライフは 250 に設定
@@ -717,12 +761,27 @@ function sceneSetting(){
     }
     // ボスが破壊されたらシーンを intro に設定する
     if(boss.life <= 0){
+      for(let i=0; i < boss.homingArray.length; i++) {
+        boss.homingArray[i].life = 0;
+      }
+      for(let i=0; i < boss.enemyArray.length; i++) {
+        boss.enemyArray[i].life = 0;
+      }
+      for(let i=0; i < boss.shotArray.length; i++) {
+        boss.shotArray[i].life = 0;
+      }
       scene.use('gameclear');
     }
   });
   // ゲームオーバーシーン
   // ここでは画面にゲームオーバーの文字が流れ続けるようにする
   scene.add('gameover', (time) => {
+    if(bgCommonSound !== null && scene.frame === 0) {
+      if(bgCommonSound.pause === false) bgCommonSound.setPause();
+    }
+    if(bgBossSound !== null && scene.frame === 0) {
+      if(bgBossSound.pause === false) bgBossSound.setPause();
+    }
     // 流れる文字の幅は画面の幅の半分を最大の幅とする
     let textWidth = CANVAS_WIDTH / 2;
     // 文字の幅を全体の幅に足し、ループする幅を決める
@@ -777,6 +836,9 @@ function sceneSetting(){
   }
   // ゲームクリア
   scene.add('gameclear', (time) => {
+    if(bgBossSound !== null && scene.frame === 0) {
+      bgBossSound.setPause();
+    }
     let title = 'Game Clear!';
     let text1 = `Clear Bonus　+${CLEAR_BONUS}`;
     let text2 = `Score　${zeroPadding(gameScore, 5)}`;
