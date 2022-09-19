@@ -206,7 +206,7 @@ window.addEventListener('load', () => {
     let y = Math.random() * CANVAS_HEIGHT;
     backgroundStarArray[i].set(x, y);
   }
-  viper = new Viper(ctx, 0, 0, 64, 64, './image/viper.png');
+  viper = new Viper(ctx, 0, 0, 64, 64, './image/viper3.png');
   viper.setOpening(100, CANVAS_HEIGHT / 2);
   viper.setVectorFromAngle(degreesToRadians(0));
   title = new Opening(ctx, CANVAS_WIDTH / 2, 0, 300, 150, './image/title.png', 'title');
@@ -325,7 +325,7 @@ function initialize(){
   }
 
   // 自機キャラクターを初期化する
-  viper = new Viper(ctx, 0, 0, 64, 64, './image/viper.png');
+  viper = new Viper(ctx, 0, 0, 64, 64, './image/viper3.png');
   // 登場シーンからスタートするための設定を行う
   viper.setComing(
     -50,   // 登場演出時の開始 X 座標
@@ -368,14 +368,14 @@ function initialize(){
     homingArray[i].setExplosions(explosionArray);
   }
   for(i = 0; i < BOSS_ENEMY_SHOT_MAX_COUNT; ++i){
-    bossEnemyShotArray[i] = new Enemy(ctx, 0, 0, 32, 32, './image/enemy_small.png');
+    bossEnemyShotArray[i] = new Enemy(ctx, 0, 0, 32, 32, './image/enemy_small2.png');
     bossEnemyShotArray[i].setShotArray(enemyShotArray);
     bossEnemyShotArray[i].setAttackTargets([viper, funnel]);
     bossEnemyShotArray[i].setExplosions(explosionArray);
   }
 
   // ボスキャラクターを初期化する
-  boss = new Boss(ctx, 0, 0, 128, 128, './image/boss.png');
+  boss = new Boss(ctx, 0, 0, 128, 128, './image/boss2.png');
   // 敵キャラクターはすべて同じショットを共有するのでここで与えておく
   boss.setShotArray(enemyShotArray);
   // ボスキャラクターはホーミングショットを持っているので設定する
@@ -394,7 +394,7 @@ function initialize(){
 
   // 敵キャラクター（小）を初期化する
   for(i = 0; i < ENEMY_SMALL_MAX_COUNT; ++i){
-    enemyArray[i] = new Enemy(ctx, 0, 0, 48, 48, './image/enemy_small.png');
+    enemyArray[i] = new Enemy(ctx, 0, 0, 64, 64, './image/enemy_small2.png');
     // 敵キャラクターはすべて同じショットを共有するのでここで与えておく
     enemyArray[i].setShotArray(enemyShotArray);
     // 敵キャラクターは常に自機キャラクターを攻撃対象とする
@@ -403,7 +403,7 @@ function initialize(){
 
   // 敵キャラクター（大）を初期化する
   for(i = 0; i < ENEMY_LARGE_MAX_COUNT; ++i){
-    enemyArray[ENEMY_SMALL_MAX_COUNT + i] = new Enemy(ctx, 0, 0, 64, 64, './image/enemy_large.png');
+    enemyArray[ENEMY_SMALL_MAX_COUNT + i] = new Enemy(ctx, 0, 0, 64, 64, './image/enemy_large2.png');
     // 敵キャラクターはすべて同じショットを共有するのでここで与えておく
     enemyArray[ENEMY_SMALL_MAX_COUNT + i].setShotArray(enemyShotArray);
     // 敵キャラクターは常に自機キャラクターを攻撃対象とする
@@ -419,7 +419,7 @@ function initialize(){
   }
 
   for(i = 0; i < ENEMY_ASSAULT_MAX_COUNT; ++i){
-    enemyArray[ENEMY_SMALL_MAX_COUNT + ENEMY_LARGE_MAX_COUNT + ENEMY_BLOCK_MAX_COUNT + i] = new Enemy(ctx, 0, 0, 48, 48, './image/assault.png');
+    enemyArray[ENEMY_SMALL_MAX_COUNT + ENEMY_LARGE_MAX_COUNT + ENEMY_BLOCK_MAX_COUNT + i] = new Enemy(ctx, 0, 0, 64, 64, './image/enemy_assaults.png');
     // 敵キャラクターは常に自機キャラクターを攻撃対象とする
     enemyArray[ENEMY_SMALL_MAX_COUNT + ENEMY_LARGE_MAX_COUNT + ENEMY_BLOCK_MAX_COUNT + i].setAttackTargets([viper, funnel]);
     enemyArray[ENEMY_SMALL_MAX_COUNT + ENEMY_LARGE_MAX_COUNT + ENEMY_BLOCK_MAX_COUNT + i].setDropItemArray(dropItemArray);
